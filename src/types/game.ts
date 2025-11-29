@@ -1,9 +1,9 @@
-import {LevelDifficulty} from "../enums/game";
+import {LevelDifficulty, QuestionType} from "../enums/game";
 
 export interface CryptoLevel {
   id: number;
   mainPhrase: string;
-  encodedPhrase: number[];
+  encodedPhrase: (number | null)[];
   letterMapping: Record<string, number>;
   questions: CryptoQuestion[];
   topic: string;
@@ -14,7 +14,7 @@ export interface CryptoQuestion {
   id: number;
   question: string;
   answer: string;
-  encodedAnswer: number[];
+  encodedAnswer: (number | null)[];
   hint?: string;
 }
 
@@ -26,10 +26,10 @@ export interface GameProgress {
     questions: Record<number, string[]>;
   };
   score: number;
-  attempts: number; // Добавляем попытки
+  attempts: number;
 }
 
 export interface GameState {
-  selectedCode: { type: 'main' | 'question', index?: number, codeIndex: number } | null;
-  wrongSelection: { type: 'main' | 'question', index?: number, codeIndex: number } | null; // Для анимации ошибки
+  selectedCode: { type: QuestionType, index?: number, codeIndex: number } | null;
+  wrongSelection: { type: QuestionType, index?: number, codeIndex: number } | null;
 }

@@ -1,38 +1,48 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 
 interface AnswerLetterProps {
-  code: number;
+  code: number | null;
   letter: string;
   isSelected: boolean;
-  isWrong: boolean; // Новый проп для ошибки
+  isWordSelected: boolean;
+  isWrong: boolean;
   isSolved: boolean;
   onPress: () => void;
+  isSpace?: boolean;
 }
 
 const AnswerLetter: React.FC<AnswerLetterProps> = ({
-                                                     code,
-                                                     letter,
-                                                     isSelected,
-                                                     isWrong,
-                                                     isSolved,
-                                                     onPress
-                                                   }) => {
+  code,
+  letter,
+  isSelected,
+  isWordSelected,
+  isWrong,
+  isSolved,
+  onPress,
+  isSpace = false,
+}) => {
+  if (isSpace || code === null) {
+    return (
+      <View style={[styles.space, isWordSelected && styles.spaceWordSelected]}>
+        <Text style={styles.spaceText}> </Text>
+      </View>
+    );
+  }
+
   return (
     <TouchableOpacity
       style={[
         styles.answerLetter,
+        isWordSelected && styles.answerLetterWordSelected,
         isSelected && styles.answerLetterSelected,
         isSolved && styles.answerLetterSolved,
-        isWrong && styles.answerLetterWrong // Стиль для ошибки
+        isWrong && styles.answerLetterWrong,
       ]}
       onPress={onPress}
-      disabled={isSolved || isWrong} // Блокируем во время анимации ошибки
-    >
+      disabled={isSolved || isWrong}>
+      <Text style={styles.letterValue}>{isSolved ? letter : letter || '?'}</Text>
       <Text style={styles.letterCode}>{code}</Text>
-      <Text style={styles.letterValue}>
-        {isSolved ? letter : (letter || '?')}
-      </Text>
     </TouchableOpacity>
   );
 };
@@ -41,7 +51,7 @@ const styles = StyleSheet.create({
   answerLetter: {
     width: 50,
     height: 70,
-    margin: 5,
+    margin: 2,
     backgroundColor: '#f8fafc',
     borderRadius: 10,
     alignItems: 'center',
@@ -50,10 +60,14 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     padding: 5,
   },
+  answerLetterWordSelected: {
+    backgroundColor: '#f0f9ff',
+    borderColor: '#bae6fd',
+  },
   answerLetterSelected: {
     borderColor: '#4f46e5',
     backgroundColor: '#e0e7ff',
-    transform: [{ scale: 1.05 }],
+    transform: [{scale: 1.05}],
   },
   answerLetterSolved: {
     backgroundColor: '#d1fae5',
@@ -62,7 +76,25 @@ const styles = StyleSheet.create({
   answerLetterWrong: {
     backgroundColor: '#fef2f2',
     borderColor: '#ef4444',
-    transform: [{ scale: 0.95 }],
+    transform: [{scale: 0.95}],
+  },
+  space: {
+    width: 30,
+    height: 70,
+    margin: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.5,
+  },
+  spaceWordSelected: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    opacity: 0.8,
+  },
+  spaceText: {
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: 'bold',
   },
   letterCode: {
     fontSize: 12,
@@ -70,9 +102,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   letterValue: {
-    fontSize: 20,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#1e293b',
+    borderTopColor: 'black',
   },
 });
 

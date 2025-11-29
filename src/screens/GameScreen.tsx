@@ -1,39 +1,51 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
-import { RouteProp } from '@react-navigation/native';
+import React, {useState} from 'react';
+import {Alert, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {RouteProp} from '@react-navigation/native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+
 import AnswerLetter from '../components/AnswerLetter';
 import VirtualKeyboard from '../components/VirtualKeyboard';
-import { CryptoLevel } from '../types/game';
+import {CryptoLevel} from '../types/game';
+import {QuestionType} from '../enums/game';
+import {findNextEmptyLetter, getSelectedWordIndices, isQuestionSolved} from '../utils';
 
-type GameScreenRouteProp = RouteProp<{ Game: { levels: CryptoLevel[] } }, 'Game'>;
+type GameScreenRouteProp = RouteProp<{Game: {levels: CryptoLevel[]}}, 'Game'>;
 
 interface Props {
   route: GameScreenRouteProp;
 }
 
-const GameScreen: React.FC<Props> = ({ route }) => {
-  const { levels } = route.params;
+const GameScreen: React.FC<Props> = ({route}) => {
+  const {levels} = route.params;
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [discoveredLetters, setDiscoveredLetters] = useState<Record<number, string>>({});
-  const [selectedCode, setSelectedCode] = useState<{type: 'main' | 'question', index?: number, codeIndex: number} | null>(null);
-  const [wrongSelection, setWrongSelection] = useState<{type: 'main' | 'question', index?: number, codeIndex: number} | null>(null);
-  const [attempts, setAttempts] = useState(3); // 3 попытки на уровень
+  const [selectedCode, setSelectedCode] = useState<{
+    type: QuestionType;
+    index?: number;
+    codeIndex: number;
+  } | null>(null);
+  const [wrongSelection, setWrongSelection] = useState<{
+    type: QuestionType;
+    index?: number;
+    codeIndex: number;
+  } | null>(null);
+  const [attempts, setAttempts] = useState(3);
 
   const [userAnswers, setUserAnswers] = useState<{
     mainPhrase: string[];
     questions: Record<number, string[]>;
   }>({
     mainPhrase: Array(levels[0].encodedPhrase.length).fill(''),
-    questions: {}
+    questions: {},
   });
 
   const currentLevel = levels[currentLevelIndex];
 
   const getAttemptsColor = () => {
-    if (attempts === 3) return '#059669'; // зеленый
-    if (attempts === 2) return '#d97706'; // оранжевый
-    if (attempts === 1) return '#dc2626'; // красный
-    return '#6b7280'; // серый
+    if (attempts === 3) return '#059669';
+    if (attempts === 2) return '#d97706';
+    if (attempts === 1) return '#dc2626';
+    return '#6b7280';
   };
 
   const getAttemptsText = () => {
@@ -43,87 +55,98 @@ const GameScreen: React.FC<Props> = ({ route }) => {
     return '⚫⚫⚫';
   };
 
-  // Инициализируем ответы для вопросов
   React.useEffect(() => {
     const initialQuestions: Record<number, string[]> = {};
-    currentLevel.questions.forEach(question => {
+    currentLevel.questions.forEach((question) => {
       initialQuestions[question.id] = Array(question.answer.length).fill('');
     });
-    setUserAnswers(prev => ({
+    setUserAnswers((prev) => ({
       ...prev,
-      questions: initialQuestions
+      questions: initialQuestions,
     }));
-    setAttempts(3); // Сбрасываем попытки при смене уровня
+    setAttempts(3);
   }, [currentLevelIndex]);
 
-  const handleLetterPress = (type: 'main' | 'question', index: number | undefined, codeIndex: number) => {
-    setSelectedCode({ type, index, codeIndex });
+  const handleLetterPress = (type: QuestionType, index: number | undefined, codeIndex: number) => {
+    setSelectedCode({type, index, codeIndex});
   };
 
   const handleKeyboardLetterPress = async (letter: string) => {
     if (!selectedCode) return;
 
-    const { type, index, codeIndex } = selectedCode;
-    let code: number;
+    const {type, index, codeIndex} = selectedCode;
+    let code: number | null;
     let correctLetter: string;
+    let encodedArray: (number | null)[];
 
-    if (type === 'main') {
-      code = currentLevel.encodedPhrase[codeIndex];
+    if (type === QuestionType.Main) {
+      encodedArray = currentLevel.encodedPhrase;
+      code = encodedArray[codeIndex];
       correctLetter = currentLevel.mainPhrase[codeIndex];
     } else {
-      const question = currentLevel.questions.find(q => q.id === index);
+      const question = currentLevel.questions.find((q) => q.id === index);
       if (!question) return;
-      code = question.encodedAnswer[codeIndex];
+      encodedArray = question.encodedAnswer;
+      code = encodedArray[codeIndex];
       correctLetter = question.answer[codeIndex];
     }
 
-    // Проверяем правильность
+    if (code === null) return;
+
     if (letter === correctLetter) {
-      // Правильно - обновляем ответ и discoveredLetters
-      if (type === 'main') {
+      if (type === QuestionType.Main) {
         const newMainPhrase = [...userAnswers.mainPhrase];
         newMainPhrase[codeIndex] = letter;
-        setUserAnswers(prev => ({
+        setUserAnswers((prev) => ({
           ...prev,
-          mainPhrase: newMainPhrase
+          mainPhrase: newMainPhrase,
         }));
+
+        const nextIndex = findNextEmptyLetter(encodedArray, newMainPhrase, codeIndex);
+        if (nextIndex !== null) {
+          setSelectedCode({type: QuestionType.Main, codeIndex: nextIndex});
+        } else {
+          setSelectedCode(null);
+        }
       } else {
-        const newQuestionAnswers = { ...userAnswers.questions };
+        const newQuestionAnswers = {...userAnswers.questions};
         newQuestionAnswers[index!] = [...newQuestionAnswers[index!]];
         newQuestionAnswers[index!][codeIndex] = letter;
-        setUserAnswers(prev => ({
+        setUserAnswers((prev) => ({
           ...prev,
-          questions: newQuestionAnswers
+          questions: newQuestionAnswers,
         }));
+
+        const nextIndex = findNextEmptyLetter(encodedArray, newQuestionAnswers[index!], codeIndex);
+        if (nextIndex !== null) {
+          setSelectedCode({
+            type: QuestionType.Question,
+            index,
+            codeIndex: nextIndex,
+          });
+        } else {
+          setSelectedCode(null);
+        }
       }
 
-      setDiscoveredLetters(prev => ({
+      setDiscoveredLetters((prev) => ({
         ...prev,
-        [code]: letter
+        [code]: letter,
       }));
-
-      setSelectedCode(null);
-
     } else {
-      // Неправильно - анимация ошибки и минус попытка
       setWrongSelection(selectedCode);
       const newAttempts = attempts - 1;
       setAttempts(newAttempts);
 
-      // Анимация ошибки на 1 секунду
       setTimeout(() => {
         setWrongSelection(null);
-        setSelectedCode(null);
       }, 1000);
 
-      // Проверяем кончились ли попытки
       if (newAttempts === 0) {
         setTimeout(() => {
-          Alert.alert(
-            'Спроб не залишилось!',
-            'Починаємо рівень знову.',
-            [{ text: 'OK', onPress: resetLevel }]
-          );
+          Alert.alert('Спроб не залишилось!', 'Починаємо рівень знову.', [
+            {text: 'OK', onPress: resetLevel},
+          ]);
         }, 1200);
       }
     }
@@ -134,8 +157,8 @@ const GameScreen: React.FC<Props> = ({ route }) => {
     setUserAnswers({
       mainPhrase: Array(currentLevel.encodedPhrase.length).fill(''),
       questions: Object.fromEntries(
-        currentLevel.questions.map(q => [q.id, Array(q.answer.length).fill('')])
-      )
+        currentLevel.questions.map((q) => [q.id, Array(q.answer.length).fill('')]),
+      ),
     });
     setAttempts(3);
     setSelectedCode(null);
@@ -143,53 +166,53 @@ const GameScreen: React.FC<Props> = ({ route }) => {
   };
 
   const isLevelSolved = currentLevel.encodedPhrase.every(
-    (code, index) => userAnswers.mainPhrase[index] === currentLevel.mainPhrase[index]
+    (code, index) => userAnswers.mainPhrase[index] === currentLevel.mainPhrase[index],
   );
 
-  const isQuestionSolved = (questionId: number) => {
-    const question = currentLevel.questions.find(q => q.id === questionId);
-    if (!question) return false;
-
-    return question.encodedAnswer.every(
-      (code, index) => userAnswers.questions[questionId]?.[index] === question.answer[index]
-    );
-  };
+  const selectedWordIndices = getSelectedWordIndices(selectedCode, currentLevel);
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.content}>
-        {/* Заголовок уровня */}
-        <View style={styles.header}>
-          <Text style={styles.topic}>{currentLevel.topic}</Text>
-          <Text style={styles.levelInfo}>Рівень {currentLevel.id}</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.topic}>{currentLevel.topic}</Text>
+        <Text style={styles.levelInfo}>Рівень {currentLevel.id}</Text>
 
-          <View style={styles.attemptsContainer}>
-            <Text style={styles.attemptsIcons}>{getAttemptsText()}</Text>
-            <Text style={[styles.attemptsText, { color: getAttemptsColor() }]}>
-              {attempts} спроб{attempts === 1 ? 'а' : 'и'}
-            </Text>
-          </View>
+        <View style={styles.attemptsContainer}>
+          <Text style={styles.attemptsIcons}>{getAttemptsText()}</Text>
+          <Text style={[styles.attemptsText, {color: getAttemptsColor()}]}>
+            {attempts} спроб{attempts === 1 ? 'а' : 'и'}
+          </Text>
         </View>
+      </View>
 
-        {/* Основная зашифрованная фраза */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Головна фраза:</Text>
-          <View style={styles.phraseContainer}>
-            {currentLevel.encodedPhrase.map((code, index) => (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Головна фраза:</Text>
+        <View style={styles.phraseContainer}>
+          {currentLevel.encodedPhrase.map((code, index) => {
+            const isWordSelected = selectedWordIndices.main.includes(index);
+
+            return (
               <AnswerLetter
                 key={index}
                 code={code}
                 letter={userAnswers.mainPhrase[index]}
-                isSelected={selectedCode?.type === 'main' && selectedCode.codeIndex === index}
-                isWrong={wrongSelection?.type === 'main' && wrongSelection.codeIndex === index}
+                isSelected={
+                  selectedCode?.type === QuestionType.Main && selectedCode.codeIndex === index
+                }
+                isWordSelected={isWordSelected}
+                isWrong={
+                  wrongSelection?.type === QuestionType.Main && wrongSelection.codeIndex === index
+                }
                 isSolved={userAnswers.mainPhrase[index] === currentLevel.mainPhrase[index]}
-                onPress={() => handleLetterPress('main', undefined, index)}
+                onPress={() => handleLetterPress(QuestionType.Main, undefined, index)}
+                isSpace={code === null}
               />
-            ))}
-          </View>
+            );
+          })}
         </View>
+      </View>
 
-        {/* Все вопросы списком */}
+      <ScrollView style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Питання-підказки:</Text>
           {currentLevel.questions.map((question, questionIndex) => (
@@ -198,48 +221,57 @@ const GameScreen: React.FC<Props> = ({ route }) => {
                 {questionIndex + 1}. {question.question}
               </Text>
               <View style={styles.answerContainer}>
-                {question.encodedAnswer.map((code, letterIndex) => (
-                  <AnswerLetter
-                    key={letterIndex}
-                    code={code}
-                    letter={userAnswers.questions[question.id]?.[letterIndex] || ''}
-                    isSelected={selectedCode?.type === 'question' &&
-                      selectedCode.index === question.id &&
-                      selectedCode.codeIndex === letterIndex}
-                    isWrong={wrongSelection?.type === 'question' &&
-                      wrongSelection.index === question.id &&
-                      wrongSelection.codeIndex === letterIndex}
-                    isSolved={isQuestionSolved(question.id)}
-                    onPress={() => handleLetterPress('question', question.id, letterIndex)}
-                  />
-                ))}
+                {question.encodedAnswer.map((code, letterIndex) => {
+                  const isWordSelected =
+                    selectedWordIndices.questions[question.id]?.includes(letterIndex) || false;
+
+                  return (
+                    <AnswerLetter
+                      key={letterIndex}
+                      code={code}
+                      letter={userAnswers.questions[question.id]?.[letterIndex] || ''}
+                      isSelected={
+                        selectedCode?.type === QuestionType.Question &&
+                        selectedCode.index === question.id &&
+                        selectedCode.codeIndex === letterIndex
+                      }
+                      isWordSelected={isWordSelected}
+                      isWrong={
+                        wrongSelection?.type === QuestionType.Question &&
+                        wrongSelection.index === question.id &&
+                        wrongSelection.codeIndex === letterIndex
+                      }
+                      isSolved={isQuestionSolved(question.id, userAnswers, currentLevel)}
+                      onPress={() =>
+                        handleLetterPress(QuestionType.Question, question.id, letterIndex)
+                      }
+                      isSpace={code === null}
+                    />
+                  );
+                })}
               </View>
-              {isQuestionSolved(question.id) && (
+              {isQuestionSolved(question.id, userAnswers, currentLevel) && (
                 <Text style={styles.solvedText}>✓ Розв'язано</Text>
               )}
             </View>
           ))}
         </View>
 
-        {/* Прогресс */}
         <View style={styles.progressSection}>
           <Text style={styles.progressText}>
             Знайдено літер: {Object.keys(discoveredLetters).length}
           </Text>
-          {isLevelSolved && (
-            <Text style={styles.successText}>Рівень пройдено! 🎉</Text>
-          )}
+          {isLevelSolved && <Text style={styles.successText}>Рівень пройдено! 🎉</Text>}
         </View>
       </ScrollView>
 
-      {/* Виртуальная клавиатура */}
       <VirtualKeyboard
         onLetterPress={handleKeyboardLetterPress}
         level={currentLevel}
         discoveredLetters={discoveredLetters}
-        disabled={wrongSelection !== null} // Блокируем клавиатуру во время анимации ошибки
+        disabled={wrongSelection !== null}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
